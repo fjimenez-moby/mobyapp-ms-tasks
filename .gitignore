@@ -32,8 +32,6 @@ build/
 ### VS Code ###
 .vscode/
 
-### Carpeta extraña que genera el IntelliJ
-bin/
 # Properties
 **/.env
 !**/.env.example
