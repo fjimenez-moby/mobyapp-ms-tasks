@@ -106,4 +106,32 @@ public class TasksService {
                 .build();
     }
 
+    public void markTaskComplete(String taskListId, String taskId, String accessToken) {
+        try {
+            log.info("Marking task {} as completed in list {}", taskId, taskListId);
+
+            com.google.api.services.tasks.Tasks tasksClient = clientFactory.createClient(accessToken);
+
+            // Get the task first to verify it exists
+            com.google.api.services.tasks.model.Task task = tasksClient.tasks()
+                    .get(taskListId, taskId)
+                    .execute();
+
+            if (task == null) {
+                throw new TaskNotFoundException(taskId);
+            }
+
+            // Update task status to completed
+            task.setStatus("completed");
+            tasksClient.tasks()
+                    .update(taskListId, taskId, task)
+                    .execute();
+
+            log.info("Task {} successfully marked as completed", taskId);
+
+        } catch (IOException e) {
+            log.error("Error marking task {} as completed: {}", taskId, e.getMessage(), e);
+            throw new GoogleApiException("Failed to mark task as completed", e);
+        }
+    }
 }
