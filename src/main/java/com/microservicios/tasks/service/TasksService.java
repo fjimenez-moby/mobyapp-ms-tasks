@@ -1,8 +1,11 @@
 package com.microservicios.tasks.service;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -73,7 +76,7 @@ public class TasksService {
                                             String listId) throws IOException {
         com.google.api.services.tasks.model.Tasks tasks = tasksClient.tasks()
                 .list(listId)
-                .setMaxResults((long) maxResults)
+                .setMaxResults(Integer.valueOf(maxResults))
                 .execute();
 
         if (tasks.getItems() == null) {
@@ -93,8 +96,8 @@ public class TasksService {
         String taskId = task.getId() != null ? task.getId() : "";
         String title = task.getTitle() != null ? task.getTitle() : "Untitled";
         TaskStatus status = TaskStatus.fromValue(task.getStatus() != null ? task.getStatus() : "needsAction");
-        LocalDateTime dueDate = task.getDue() != null ?
-                LocalDateTime.ofInstant(task.getDue().toInstant(), ZoneId.systemDefault()) : null;
+
+        LocalDateTime dueDate = parseDueDate(taskId, task.getDue());
         String notes = task.getNotes() != null ? task.getNotes() : "";
 
         return TaskDto.builder()
@@ -104,6 +107,28 @@ public class TasksService {
                 .dueDate(dueDate)
                 .notes(notes)
                 .build();
+    }
+
+    private LocalDateTime parseDueDate(String taskId, String dueDateString) {
+        if (dueDateString == null || dueDateString.trim().isEmpty()) {
+            return null;
+        }
+
+        try {
+            // Try parsing RFC 3339 format (e.g., "2021-07-09T00:00:00.000Z")
+            Instant instant = Instant.parse(dueDateString);
+            return LocalDateTime.ofInstant(instant, ZoneId.systemDefault());
+        } catch (DateTimeParseException e) {
+            try {
+                // Try alternative format with date only (e.g., "2021-07-09")
+                return LocalDateTime.parse(dueDateString + "T00:00:00",
+                        DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+            } catch (DateTimeParseException ex) {
+                log.warn("Could not parse due date '{}' for task {}: {}",
+                        dueDateString, taskId, ex.getMessage());
+                return null;
+            }
+        }
     }
 
     public void markTaskComplete(String taskListId, String taskId, String accessToken) {
