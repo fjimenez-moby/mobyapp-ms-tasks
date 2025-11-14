@@ -1,182 +1,162 @@
 package com.microservicios.tasks.service;
 
 import java.io.IOException;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.logging.Logger;
 
+import com.microservicios.tasks.enums.TaskStatus;
+import com.microservicios.tasks.exception.GoogleApiException;
+import com.microservicios.tasks.exception.TaskNotFoundException;
+import com.microservicios.tasks.factory.GoogleTasksClientFactory;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import com.google.auth.http.HttpCredentialsAdapter;
-import com.google.auth.oauth2.AccessToken;
-import com.google.auth.oauth2.GoogleCredentials;
-import com.google.api.client.http.javanet.NetHttpTransport;
-import com.google.api.client.json.gson.GsonFactory;
 import com.microservicios.tasks.dto.TaskDto;
 import com.microservicios.tasks.dto.TaskListDto;
 
+@Slf4j
 @Service
+@RequiredArgsConstructor
 public class TasksService {
 
-    private static final Logger logger = Logger.getLogger(TasksService.class.getName());
+    private final GoogleTasksClientFactory clientFactory;
 
-    public List<TaskListDto> listTasks(String accessTokenString) {
-        List<TaskListDto> taskListsResponse = new ArrayList<>();
+    @Value("${google.tasks.max-results:50}")
+    private int maxResults;
+
+    public List<TaskListDto> listTasks(String accessToken) {
         try {
-            logger.info("Iniciando busqueda de eventos con access token");
+            log.info("Fetching task lists from Google Tasks API");
 
-            // Armar las credenciales con el access token
-            AccessToken accessToken = new AccessToken(accessTokenString, null);
-            GoogleCredentials credentials = GoogleCredentials.create(accessToken);
+            com.google.api.services.tasks.Tasks tasksClient = clientFactory.createClient(accessToken);
+            com.google.api.services.tasks.model.TaskLists taskLists = tasksClient.tasklists().list().execute();
 
-            // Armar el servicio de task
-            com.google.api.services.tasks.Tasks service =
-                new com.google.api.services.tasks.Tasks.Builder(
-                    new NetHttpTransport(),
-                    GsonFactory.getDefaultInstance(),
-                    new HttpCredentialsAdapter(credentials))
-                .setApplicationName("MobyApp Tasks Microservice")
+            if (taskLists.getItems() == null || taskLists.getItems().isEmpty()) {
+                log.info("No task lists found");
+                return new ArrayList<>();
+            }
+
+            List<TaskListDto> taskListDtos = new ArrayList<>();
+            for (com.google.api.services.tasks.model.TaskList taskList : taskLists.getItems()) {
+                TaskListDto taskListDto = buildTaskListDto(tasksClient, taskList);
+                taskListDtos.add(taskListDto);
+            }
+
+            log.info("Successfully fetched {} task lists with total tasks", taskListDtos.size());
+            return taskListDtos;
+
+        } catch (IOException e) {
+            log.error("Error fetching tasks from Google API: {}", e.getMessage(), e);
+            throw new GoogleApiException("Failed to fetch tasks from Google API", e);
+        }
+    }
+
+    private TaskListDto buildTaskListDto(com.google.api.services.tasks.Tasks tasksClient,
+                                         com.google.api.services.tasks.model.TaskList taskList) throws IOException {
+        String listId = taskList.getId();
+        String listTitle = taskList.getTitle() != null ? taskList.getTitle() : "Untitled";
+
+        List<TaskDto> tasks = fetchTasksForList(tasksClient, listId);
+
+        return TaskListDto.builder()
+                .id(listId)
+                .title(listTitle)
+                .tasks(tasks)
                 .build();
-
-            // Traer la lista de las task
-            com.google.api.services.tasks.model.TaskLists taskLists = service.tasklists().list().execute();
-
-            if (taskLists.getItems() != null && !taskLists.getItems().isEmpty()) {
-                for (com.google.api.services.tasks.model.TaskList taskListItem : taskLists.getItems()) {
-                    String listId = taskListItem.getId();
-                    String listTitle = taskListItem.getTitle() != null ? taskListItem.getTitle() : "Sin title";
-
-                    // crear tasklistdto
-                    TaskListDto taskListDto = new TaskListDto(listId, listTitle, "tasklist");
-                    List<TaskDto> tasksInList = new ArrayList<>();
-
-                    // traer los eventos desde la lista
-                    com.google.api.services.tasks.model.Tasks tasks = service.tasks()
-                        .list(listId)
-                        .setMaxResults(50) // Aumentar limite
-                        .execute();
-
-                    if (tasks.getItems() != null) {
-                        for (com.google.api.services.tasks.model.Task task : tasks.getItems()) {
-                            String taskId = task.getId() != null ? task.getId() : "";
-                            String title = task.getTitle() != null ? task.getTitle() : "Sin titulo";
-                            String status = task.getStatus() != null ? task.getStatus() : "needsAction";
-                            String dueDate = task.getDue() != null ? task.getDue() : "Sin vencimiento";
-                            String notes = task.getNotes() != null ? task.getNotes() : "";
-
-                            tasksInList.add(new TaskDto(taskId, title, status, dueDate, notes, "task"));
-                        }
-                    }
-
-                    taskListDto.setTasks(tasksInList);
-                    taskListsResponse.add(taskListDto);
-                }
-                logger.info("Se encontraron " + taskListsResponse.size() + " task list");
-            } else {
-                logger.info("No se encontrar lista de eventos");
-            }
-
-        } catch (Exception e) {
-            logger.severe("Error escuchando eventos: " + e.getMessage());
-            e.printStackTrace();
-        }
-        return taskListsResponse;
     }
 
-    public boolean markTaskComplete(String taskId, String accessTokenString) {
+    private List<TaskDto> fetchTasksForList(com.google.api.services.tasks.Tasks tasksClient,
+                                            String listId) throws IOException {
+        com.google.api.services.tasks.model.Tasks tasks = tasksClient.tasks()
+                .list(listId)
+                .setMaxResults(Integer.valueOf(maxResults))
+                .execute();
+
+        if (tasks.getItems() == null) {
+            return new ArrayList<>();
+        }
+
+        List<TaskDto> taskDtos = new ArrayList<>();
+        for (com.google.api.services.tasks.model.Task task : tasks.getItems()) {
+            TaskDto taskDto = convertToTaskDto(task);
+            taskDtos.add(taskDto);
+        }
+
+        return taskDtos;
+    }
+
+    private TaskDto convertToTaskDto(com.google.api.services.tasks.model.Task task) {
+        String taskId = task.getId() != null ? task.getId() : "";
+        String title = task.getTitle() != null ? task.getTitle() : "Untitled";
+        TaskStatus status = TaskStatus.fromValue(task.getStatus() != null ? task.getStatus() : "needsAction");
+
+        LocalDateTime dueDate = parseDueDate(taskId, task.getDue());
+        String notes = task.getNotes() != null ? task.getNotes() : "";
+
+        return TaskDto.builder()
+                .id(taskId)
+                .title(title)
+                .status(status)
+                .dueDate(dueDate)
+                .notes(notes)
+                .build();
+    }
+
+    private LocalDateTime parseDueDate(String taskId, String dueDateString) {
+        if (dueDateString == null || dueDateString.trim().isEmpty()) {
+            return null;
+        }
+
         try {
-            logger.info("Marcando tarea como completada: " + taskId);
-
-            com.google.api.services.tasks.Tasks service = createTasksService(accessTokenString);
-            TaskSearchResult searchResult = findTaskById(service, taskId);
-
-            if (!searchResult.found()) {
-                logger.warning("No se encontró la tarea con ID: " + taskId);
-                return false;
-            }
-
-            return updateTaskStatus(service, searchResult, "completed");
-
-        } catch (Exception e) {
-            logger.severe("Error marcando tarea como completada: " + e.getMessage());
-            e.printStackTrace();
-            return false;
-        }
-    }
-
-    private com.google.api.services.tasks.Tasks createTasksService(String accessTokenString) throws IOException {
-        AccessToken accessToken = new AccessToken(accessTokenString, null);
-        GoogleCredentials credentials = GoogleCredentials.create(accessToken);
-
-        return new com.google.api.services.tasks.Tasks.Builder(
-                new NetHttpTransport(),
-                GsonFactory.getDefaultInstance(),
-                new HttpCredentialsAdapter(credentials))
-            .setApplicationName("MobyApp Tasks Microservice")
-            .build();
-    }
-
-    private TaskSearchResult findTaskById(com.google.api.services.tasks.Tasks service, String taskId) throws IOException {
-        com.google.api.services.tasks.model.TaskLists taskLists = service.tasklists().list().execute();
-
-        if (taskLists.getItems() == null) {
-            return TaskSearchResult.notFound();
-        }
-
-        for (com.google.api.services.tasks.model.TaskList taskList : taskLists.getItems()) {
+            // Try parsing RFC 3339 format (e.g., "2021-07-09T00:00:00.000Z")
+            Instant instant = Instant.parse(dueDateString);
+            return LocalDateTime.ofInstant(instant, ZoneId.systemDefault());
+        } catch (DateTimeParseException e) {
             try {
-                com.google.api.services.tasks.model.Tasks tasks = service.tasks()
-                    .list(taskList.getId())
+                // Try alternative format with date only (e.g., "2021-07-09")
+                return LocalDateTime.parse(dueDateString + "T00:00:00",
+                        DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+            } catch (DateTimeParseException ex) {
+                log.warn("Could not parse due date '{}' for task {}: {}",
+                        dueDateString, taskId, ex.getMessage());
+                return null;
+            }
+        }
+    }
+
+    public void markTaskComplete(String taskListId, String taskId, String accessToken) {
+        try {
+            log.info("Marking task {} as completed in list {}", taskId, taskListId);
+
+            com.google.api.services.tasks.Tasks tasksClient = clientFactory.createClient(accessToken);
+
+            // Get the task first to verify it exists
+            com.google.api.services.tasks.model.Task task = tasksClient.tasks()
+                    .get(taskListId, taskId)
                     .execute();
 
-                if (tasks.getItems() != null) {
-                    for (com.google.api.services.tasks.model.Task task : tasks.getItems()) {
-                        if (taskId.equals(task.getId())) {
-                            return TaskSearchResult.found(taskList.getId(), task);
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                logger.warning("Error buscando en lista " + taskList.getId() + ": " + e.getMessage());
+            if (task == null) {
+                throw new TaskNotFoundException(taskId);
             }
+
+            // Update task status to completed
+            task.setStatus("completed");
+            tasksClient.tasks()
+                    .update(taskListId, taskId, task)
+                    .execute();
+
+            log.info("Task {} successfully marked as completed", taskId);
+
+        } catch (IOException e) {
+            log.error("Error marking task {} as completed: {}", taskId, e.getMessage(), e);
+            throw new GoogleApiException("Failed to mark task as completed", e);
         }
-
-        return TaskSearchResult.notFound();
-    }
-
-    private boolean updateTaskStatus(com.google.api.services.tasks.Tasks service,
-                                   TaskSearchResult searchResult, String status) throws IOException {
-        searchResult.getTask().setStatus(status);
-        service.tasks().update(searchResult.getTaskListId(),
-                              searchResult.getTask().getId(),
-                              searchResult.getTask()).execute();
-
-        logger.info("Tarea marcada como completada exitosamente: " + searchResult.getTask().getId());
-        return true;
-    }
-
-    // Clase auxiliar para el resultado de búsqueda
-    private static class TaskSearchResult {
-        private final String taskListId;
-        private final com.google.api.services.tasks.model.Task task;
-        private final boolean found;
-
-        private TaskSearchResult(String taskListId, com.google.api.services.tasks.model.Task task, boolean found) {
-            this.taskListId = taskListId;
-            this.task = task;
-            this.found = found;
-        }
-
-        static TaskSearchResult found(String taskListId, com.google.api.services.tasks.model.Task task) {
-            return new TaskSearchResult(taskListId, task, true);
-        }
-
-        static TaskSearchResult notFound() {
-            return new TaskSearchResult(null, null, false);
-        }
-
-        boolean found() { return found; }
-        String getTaskListId() { return taskListId; }
-        com.google.api.services.tasks.model.Task getTask() { return task; }
     }
 }
