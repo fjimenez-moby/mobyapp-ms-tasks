@@ -17,10 +17,10 @@ import java.util.List;
 public class TaskListDto {
     private String id;
 
-    @NotBlank(message = "Title is required")
+    @NotBlank(message = "El título es requerido")
     private String title;
 
-    @NotNull(message = "Tasks list cannot be null")
+    @NotNull(message = "La lista de tareas no puede ser nula")
     @Builder.Default
     private List<TaskDto> tasks = new ArrayList<>();
 }

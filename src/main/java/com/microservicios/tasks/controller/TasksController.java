@@ -31,7 +31,7 @@ public class TasksController {
         List<TaskListDto> taskLists = tasksService.listTasks(accessToken);
         TasksResponse response = TasksResponse.from(taskLists);
 
-        return ResponseEntity.ok(ApiResponse.success("Task lists retrieved successfully", response));
+        return ResponseEntity.ok(ApiResponse.success("Listas de tareas obtenidas exitosamente", response));
     }
 
     @PostMapping("/{taskListId}/tasks/{taskId}/complete")
@@ -45,21 +45,21 @@ public class TasksController {
 
         tasksService.markTaskComplete(taskListId, taskId, accessToken);
 
-        return ResponseEntity.ok(ApiResponse.success("Task marked as completed successfully", null));
+        return ResponseEntity.ok(ApiResponse.success("Tarea marcada como completada exitosamente", null));
     }
 
     @GetMapping("/info")
     public ResponseEntity<ApiResponse<ServiceInfo>> getServiceInfo() {
         ServiceInfo info = ServiceInfo.builder()
                 .version("1.0.0")
-                .description("Microservice for Google Tasks API")
+                .description("Microservicio para Google Tasks API")
                 .endpoints(new String[]{
-                        "GET /api/tasks - List all task lists",
-                        "POST /api/tasks/{taskListId}/tasks/{taskId}/complete - Mark task as completed",
-                        "GET /api/tasks/info - Service information"
+                        "GET /api/tasks - Listar todas las listas de tareas",
+                        "POST /api/tasks/{taskListId}/tasks/{taskId}/complete - Marcar tarea como completada",
+                        "GET /api/tasks/info - Información del servicio"
                 })
-                .usage("Endpoints require 'Authorization: Bearer {google_access_token}' header")
-                .note("Microservice for reading and modifying Google Tasks")
+                .usage("Los endpoints requieren el header 'Authorization: Bearer {google_access_token}'")
+                .note("Microservicio para lectura y modificación de Google Tasks")
                 .build();
 
         return ResponseEntity.ok(ApiResponse.success(info));
@@ -67,7 +67,7 @@ public class TasksController {
 
     private String extractAccessToken(String authHeader) {
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            throw new InvalidTokenException("Authorization header is missing or invalid");
+            throw new InvalidTokenException("El header de autorización está ausente o es inválido");
         }
         return authHeader.substring(7);
     }

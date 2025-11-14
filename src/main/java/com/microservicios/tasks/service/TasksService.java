@@ -33,13 +33,13 @@ public class TasksService {
 
     public List<TaskListDto> listTasks(String accessToken) {
         try {
-            log.info("Fetching task lists from Google Tasks API");
+            log.info("Obteniendo listas de tareas desde Google Tasks API");
 
             com.google.api.services.tasks.Tasks tasksClient = clientFactory.createClient(accessToken);
             com.google.api.services.tasks.model.TaskLists taskLists = tasksClient.tasklists().list().execute();
 
             if (taskLists.getItems() == null || taskLists.getItems().isEmpty()) {
-                log.info("No task lists found");
+                log.info("No se encontraron listas de tareas");
                 return new ArrayList<>();
             }
 
@@ -49,12 +49,12 @@ public class TasksService {
                 taskListDtos.add(taskListDto);
             }
 
-            log.info("Successfully fetched {} task lists with total tasks", taskListDtos.size());
+            log.info("Se obtuvieron exitosamente {} listas de tareas", taskListDtos.size());
             return taskListDtos;
 
         } catch (IOException e) {
-            log.error("Error fetching tasks from Google API: {}", e.getMessage(), e);
-            throw new GoogleApiException("Failed to fetch tasks from Google API", e);
+            log.error("Error al obtener tareas desde Google API: {}", e.getMessage(), e);
+            throw new GoogleApiException("Error al obtener tareas desde Google API", e);
         }
     }
 
@@ -115,16 +115,16 @@ public class TasksService {
         }
 
         try {
-            // Try parsing RFC 3339 format (e.g., "2021-07-09T00:00:00.000Z")
+            // Intentar parsear formato RFC 3339 (ej: "2021-07-09T00:00:00.000Z")
             Instant instant = Instant.parse(dueDateString);
             return LocalDateTime.ofInstant(instant, ZoneId.systemDefault());
         } catch (DateTimeParseException e) {
             try {
-                // Try alternative format with date only (e.g., "2021-07-09")
+                // Intentar formato alternativo solo con fecha (ej: "2021-07-09")
                 return LocalDateTime.parse(dueDateString + "T00:00:00",
                         DateTimeFormatter.ISO_LOCAL_DATE_TIME);
             } catch (DateTimeParseException ex) {
-                log.warn("Could not parse due date '{}' for task {}: {}",
+                log.warn("No se pudo parsear la fecha de vencimiento '{}' para la tarea {}: {}",
                         dueDateString, taskId, ex.getMessage());
                 return null;
             }
@@ -133,11 +133,11 @@ public class TasksService {
 
     public void markTaskComplete(String taskListId, String taskId, String accessToken) {
         try {
-            log.info("Marking task {} as completed in list {}", taskId, taskListId);
+            log.info("Marcando tarea {} como completada en la lista {}", taskId, taskListId);
 
             com.google.api.services.tasks.Tasks tasksClient = clientFactory.createClient(accessToken);
 
-            // Get the task first to verify it exists
+            // Obtener la tarea primero para verificar que existe
             com.google.api.services.tasks.model.Task task = tasksClient.tasks()
                     .get(taskListId, taskId)
                     .execute();
@@ -146,17 +146,17 @@ public class TasksService {
                 throw new TaskNotFoundException(taskId);
             }
 
-            // Update task status to completed
+            // Actualizar el estado de la tarea a completada
             task.setStatus("completed");
             tasksClient.tasks()
                     .update(taskListId, taskId, task)
                     .execute();
 
-            log.info("Task {} successfully marked as completed", taskId);
+            log.info("Tarea {} marcada exitosamente como completada", taskId);
 
         } catch (IOException e) {
-            log.error("Error marking task {} as completed: {}", taskId, e.getMessage(), e);
-            throw new GoogleApiException("Failed to mark task as completed", e);
+            log.error("Error al marcar tarea {} como completada: {}", taskId, e.getMessage(), e);
+            throw new GoogleApiException("Error al marcar tarea como completada", e);
         }
     }
 }

@@ -18,7 +18,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(TaskNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleTaskNotFoundException(TaskNotFoundException ex) {
-        log.error("Task not found: {}", ex.getMessage());
+        log.error("Tarea no encontrada: {}", ex.getMessage());
         ErrorResponse error = ErrorResponse.of(
                 ex.getMessage(),
                 "TASK_NOT_FOUND",
@@ -29,9 +29,9 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(GoogleApiException.class)
     public ResponseEntity<ErrorResponse> handleGoogleApiException(GoogleApiException ex) {
-        log.error("Google API error: {}", ex.getMessage(), ex);
+        log.error("Error en Google API: {}", ex.getMessage(), ex);
         ErrorResponse error = ErrorResponse.of(
-                "Error communicating with Google Tasks API",
+                "Error al comunicarse con Google Tasks API",
                 "GOOGLE_API_ERROR",
                 HttpStatus.INTERNAL_SERVER_ERROR.value()
         );
@@ -40,7 +40,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(InvalidTokenException.class)
     public ResponseEntity<ErrorResponse> handleInvalidTokenException(InvalidTokenException ex) {
-        log.error("Invalid token: {}", ex.getMessage());
+        log.error("Token inválido: {}", ex.getMessage());
         ErrorResponse error = ErrorResponse.of(
                 ex.getMessage(),
                 "INVALID_TOKEN",
@@ -58,9 +58,9 @@ public class GlobalExceptionHandler {
             errors.put(fieldName, errorMessage);
         });
 
-        log.error("Validation error: {}", errors);
+        log.error("Error de validación: {}", errors);
         ErrorResponse error = ErrorResponse.of(
-                "Validation failed: " + errors.toString(),
+                "Validación fallida: " + errors.toString(),
                 "VALIDATION_ERROR",
                 HttpStatus.BAD_REQUEST.value()
         );
@@ -69,9 +69,9 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGenericException(Exception ex) {
-        log.error("Unexpected error: {}", ex.getMessage(), ex);
+        log.error("Error inesperado: {}", ex.getMessage(), ex);
         ErrorResponse error = ErrorResponse.of(
-                "An unexpected error occurred",
+                "Ocurrió un error inesperado",
                 "INTERNAL_SERVER_ERROR",
                 HttpStatus.INTERNAL_SERVER_ERROR.value()
         );

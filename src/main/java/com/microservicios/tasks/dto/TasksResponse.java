@@ -26,7 +26,7 @@ public class TasksResponse {
                 .taskLists(taskLists)
                 .taskListCount(taskLists.size())
                 .totalTasks(totalTasks)
-                .note(String.format("Showing %d lists with %d total tasks", taskLists.size(), totalTasks))
+                .note(String.format("Mostrando %d listas con %d tareas en total", taskLists.size(), totalTasks))
                 .build();
     }
 }

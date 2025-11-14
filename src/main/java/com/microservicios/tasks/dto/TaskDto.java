@@ -18,10 +18,10 @@ import java.time.LocalDateTime;
 public class TaskDto {
     private String id;
 
-    @NotBlank(message = "Title is required")
+    @NotBlank(message = "El título es requerido")
     private String title;
 
-    @NotNull(message = "Status is required")
+    @NotNull(message = "El estado es requerido")
     private TaskStatus status;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
