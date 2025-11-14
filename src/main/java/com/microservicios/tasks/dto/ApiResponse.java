@@ -29,6 +29,6 @@ public class ApiResponse<T> {
     }
 
     public static <T> ApiResponse<T> success(T data) {
-        return success("Operation completed successfully", data);
+        return success("Operación completada exitosamente", data);
     }
 }
